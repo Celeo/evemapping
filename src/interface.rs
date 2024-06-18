@@ -5,7 +5,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use log::debug;
+use log::{debug, info};
 use rfesi::prelude::Esi;
 use std::time::{Duration, Instant};
 use tui::{
@@ -40,6 +40,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
             debug!("Query ESI");
             last_updated = Instant::now();
         }
+        let system_anoms_count = app.system_anomalies().len();
 
         let _ = terminal.draw(|f| {
             let chunks = Layout::default()
@@ -74,7 +75,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
                 .highlight_style(Style::default().bg(Color::White))
                 .highlight_symbol(">> ");
             let mut anoms_state = ListState::default();
-            if app.system_anomalies().len() > 0 {
+            if system_anoms_count > 0 {
                 anoms_state.select(Some(app.data_index));
             }
             f.render_stateful_widget(anoms, top_chunks[1], &mut anoms_state);
@@ -97,13 +98,12 @@ pub async fn run(_esi: Esi) -> Result<()> {
         // keyboard interaction
         if event::poll(Duration::from_secs(EVENT_POLL_RATE))? {
             if let Event::Key(key) = event::read()? {
-                // keys that are always active
-                match key.code {
-                    KeyCode::Esc => {
-                        app.is_adding = false;
-                        app.is_editing = false;
-                    }
-                    _ => {}
+                // can always close modals to get back to normal view
+                if key.code == KeyCode::Esc {
+                    app.is_adding = false;
+                    app.adding_data = None;
+                    app.is_editing = false;
+                    app.editing_data = None;
                 }
 
                 if app.is_adding {
@@ -112,21 +112,20 @@ pub async fn run(_esi: Esi) -> Result<()> {
                     // ...
                 } else {
                     // normal state
-                    let anoms = app.system_anomalies();
                     match key.code {
                         KeyCode::Char('q') => break,
                         KeyCode::Enter => {
-                            if anoms.len() > 0 {
+                            if system_anoms_count > 0 {
                                 app.is_editing = true;
                             }
                         }
                         KeyCode::Down => {
-                            if anoms.len() > 1 && app.data_index < anoms.len() - 1 {
+                            if system_anoms_count > 1 && app.data_index < system_anoms_count - 1 {
                                 app.data_index += 1;
                             }
                         }
                         KeyCode::Up => {
-                            if anoms.len() > 1 && app.data_index > 0 {
+                            if system_anoms_count > 1 && app.data_index > 0 {
                                 app.data_index -= 1;
                             }
                         }

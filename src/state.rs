@@ -55,10 +55,10 @@ impl App {
         }
     }
 
-    pub fn system_anomalies(&self) -> Vec<Anomaly> {
+    pub fn system_anomalies(&self) -> Vec<&Anomaly> {
         if let Some(current_system) = self.current_system.as_ref() {
             if let Some(data) = self.system_data.get(current_system) {
-                return data.clone();
+                return data.iter().collect();
             }
         }
         Vec::new()
