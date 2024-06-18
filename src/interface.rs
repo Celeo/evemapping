@@ -6,12 +6,13 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use log::debug;
+use rfesi::prelude::Esi;
 use std::time::{Duration, Instant};
 use tui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Borders, Clear},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Terminal,
 };
 
@@ -19,7 +20,7 @@ const EVENT_POLL_RATE: u64 = 5;
 const API_POLL_RATE: u64 = 15;
 
 /// Run the TUI.
-pub async fn run() -> Result<()> {
+pub async fn run(_esi: Esi) -> Result<()> {
     // configure terminal
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -60,7 +61,23 @@ pub async fn run() -> Result<()> {
             if !app.is_adding && !app.is_editing {
                 block = block.border_style(Style::default().fg(Color::Yellow));
             }
-            f.render_widget(block, top_chunks[1]);
+            let list_items = match app.current_system.as_ref() {
+                Some(s) => match app.system_data.get(s) {
+                    Some(d) => d.iter().map(|e| ListItem::new(format!("{e}"))).collect(),
+                    None => Vec::new(),
+                },
+                None => Vec::new(),
+            };
+            let anoms = List::new(list_items)
+                .block(block)
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().bg(Color::White))
+                .highlight_symbol(">> ");
+            let mut anoms_state = ListState::default();
+            if app.system_anomalies().len() > 0 {
+                anoms_state.select(Some(app.data_index));
+            }
+            f.render_stateful_widget(anoms, top_chunks[1], &mut anoms_state);
 
             let block = Block::default().title("Map").borders(Borders::ALL);
             f.render_widget(block, chunks[1]);
@@ -71,7 +88,7 @@ pub async fn run() -> Result<()> {
                     .border_style(Style::default().fg(Color::Yellow))
                     .title(title)
                     .borders(Borders::ALL);
-                let area = crate::helpers::centered_rect(40, 40, f.size());
+                let area = centered_rect(40, 40, f.size());
                 f.render_widget(Clear, area);
                 f.render_widget(block, area);
             }
@@ -80,25 +97,44 @@ pub async fn run() -> Result<()> {
         // keyboard interaction
         if event::poll(Duration::from_secs(EVENT_POLL_RATE))? {
             if let Event::Key(key) = event::read()? {
+                // keys that are always active
                 match key.code {
                     KeyCode::Esc => {
                         app.is_adding = false;
                         app.is_editing = false;
                     }
-                    KeyCode::Enter => {
-                        if !app.is_adding {
-                            app.is_editing = true;
+                    _ => {}
+                }
+
+                if app.is_adding {
+                    // ...
+                } else if app.is_editing {
+                    // ...
+                } else {
+                    // normal state
+                    let anoms = app.system_anomalies();
+                    match key.code {
+                        KeyCode::Char('q') => break,
+                        KeyCode::Enter => {
+                            if anoms.len() > 0 {
+                                app.is_editing = true;
+                            }
                         }
-                    }
-                    KeyCode::Down => {}
-                    KeyCode::Up => {}
-                    KeyCode::Char('q') => break,
-                    KeyCode::Char('n') => {
-                        if !app.is_editing {
+                        KeyCode::Down => {
+                            if anoms.len() > 1 && app.data_index < anoms.len() - 1 {
+                                app.data_index += 1;
+                            }
+                        }
+                        KeyCode::Up => {
+                            if anoms.len() > 1 && app.data_index > 0 {
+                                app.data_index -= 1;
+                            }
+                        }
+                        KeyCode::Char('n') => {
                             app.is_adding = true;
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
@@ -113,4 +149,31 @@ pub async fn run() -> Result<()> {
     )?;
     terminal.show_cursor()?;
     Ok(())
+}
+
+/// https://github.com/fdehau/tui-rs/blob/master/examples/popup.rs#L103
+pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
 }
