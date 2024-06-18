@@ -20,6 +20,7 @@ pub enum SystemClassification {
     C5,
     C6,
     C13,
+    Thera,
 }
 
 pub struct StaticWormhole {

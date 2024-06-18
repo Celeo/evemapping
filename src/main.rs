@@ -1,10 +1,11 @@
 #![deny(clippy::all, unsafe_code)]
 
 use anyhow::Result;
-use log::info;
+use log::debug;
 use std::{env, time::SystemTime};
 
 mod eve_data;
+mod helpers;
 mod interface;
 mod state;
 
@@ -31,6 +32,6 @@ fn setup_logging() -> Result<()> {
 #[tokio::main]
 async fn main() {
     setup_logging().expect("Could not set up logging");
-    info!("Starting");
+    debug!("Starting");
     interface::run().await.expect("Could not set up interface");
 }
