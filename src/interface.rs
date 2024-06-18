@@ -1,18 +1,22 @@
-use crate::state::App;
+use crate::{
+    eve_data::{get_system_data, Anomaly},
+    state::{App, ViewMode},
+};
 use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use log::{debug, info};
+use log::debug;
 use rfesi::prelude::Esi;
 use std::time::{Duration, Instant};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Terminal,
 };
 
@@ -53,13 +57,56 @@ pub async fn run(_esi: Esi) -> Result<()> {
                 .constraints([Constraint::Percentage(25), Constraint::Min(0)].as_ref())
                 .split(chunks[0]);
 
-            let block = Block::default().title("System data").borders(Borders::ALL);
-            f.render_widget(block, top_chunks[0]);
+            match app.current_system.as_ref() {
+                Some(current_system) => match get_system_data(&current_system) {
+                    Some(data) => {
+                        let block = Block::default()
+                            .title(current_system.to_string())
+                            .borders(Borders::ALL);
+                        let spans = vec![
+                            Spans::from(vec![
+                                Span::styled(
+                                    "Type: ",
+                                    Style::default().add_modifier(Modifier::BOLD),
+                                ),
+                                Span::raw(system_type.as_str()),
+                            ]),
+                            if data.class.is_some() {
+                                let mut statics: Vec<_> = connections
+                                    .iter()
+                                    .map(|c| {
+                                        Span::raw(format!(
+                                            "- {} -> {}",
+                                            c.classifier,
+                                            c.destination.as_str()
+                                        ))
+                                    })
+                                    .collect();
+                                statics.insert(0, Span::raw("Static connections:"));
+                                Spans::from(vec![Span::raw("Static connections:")])
+                            } else {
+                                Spans::from(Vec::new())
+                            },
+                        ];
+                        let static_info_p = Paragraph::new(spans).block(block);
+                        f.render_widget(static_info_p, top_chunks[0]);
+                    }
+                    None => {}
+                },
+                None => {
+                    f.render_widget(
+                        Block::default()
+                            .title("No system selected")
+                            .borders(Borders::ALL),
+                        top_chunks[0],
+                    );
+                }
+            }
 
             let mut block = Block::default()
                 .title("Scanning data")
                 .borders(Borders::ALL);
-            if !app.is_adding && !app.is_editing {
+            if app.view == ViewMode::Normal {
                 block = block.border_style(Style::default().fg(Color::Yellow));
             }
             let list_items = match app.current_system.as_ref() {
@@ -83,8 +130,12 @@ pub async fn run(_esi: Esi) -> Result<()> {
             let block = Block::default().title("Map").borders(Borders::ALL);
             f.render_widget(block, chunks[1]);
 
-            if app.is_adding || app.is_editing {
-                let title = if app.is_adding { "Add" } else { "Edit" };
+            if app.view != ViewMode::Normal {
+                let title = match &app.view {
+                    ViewMode::Normal => "",
+                    ViewMode::Adding(_) => "Add",
+                    ViewMode::Editing(anom) => &format!("Edit {}", anom.identifier),
+                };
                 let block = Block::default()
                     .border_style(Style::default().fg(Color::Yellow))
                     .title(title)
@@ -100,40 +151,43 @@ pub async fn run(_esi: Esi) -> Result<()> {
             if let Event::Key(key) = event::read()? {
                 // can always close modals to get back to normal view
                 if key.code == KeyCode::Esc {
-                    app.is_adding = false;
-                    app.adding_data = None;
-                    app.is_editing = false;
-                    app.editing_data = None;
+                    app.view = ViewMode::Normal;
                 }
 
-                if app.is_adding {
-                    // ...
-                } else if app.is_editing {
-                    // ...
-                } else {
-                    // normal state
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Enter => {
-                            if system_anoms_count > 0 {
-                                app.is_editing = true;
+                match &app.view {
+                    ViewMode::Normal => {
+                        // normal state
+                        match key.code {
+                            KeyCode::Char('q') => break,
+                            KeyCode::Enter => {
+                                if system_anoms_count > 0 {
+                                    if let Some(current_system) = app.current_system.as_ref() {
+                                        if let Some(data) = app.system_data.get(current_system) {
+                                            let anom_to_edit = data.get(app.data_index).unwrap();
+                                            app.view = ViewMode::Editing(anom_to_edit.clone());
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        KeyCode::Down => {
-                            if system_anoms_count > 1 && app.data_index < system_anoms_count - 1 {
-                                app.data_index += 1;
+                            KeyCode::Down => {
+                                if system_anoms_count > 1 && app.data_index < system_anoms_count - 1
+                                {
+                                    app.data_index += 1;
+                                }
                             }
-                        }
-                        KeyCode::Up => {
-                            if system_anoms_count > 1 && app.data_index > 0 {
-                                app.data_index -= 1;
+                            KeyCode::Up => {
+                                if system_anoms_count > 1 && app.data_index > 0 {
+                                    app.data_index -= 1;
+                                }
                             }
+                            KeyCode::Char('n') => {
+                                app.view = ViewMode::Adding(Anomaly::default());
+                            }
+                            _ => {}
                         }
-                        KeyCode::Char('n') => {
-                            app.is_adding = true;
-                        }
-                        _ => {}
                     }
+                    ViewMode::Adding(_new_anom) => {}
+                    ViewMode::Editing(_anom_edit) => {}
                 }
             }
         }

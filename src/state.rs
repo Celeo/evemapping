@@ -5,6 +5,13 @@ use crate::eve_data::{
 };
 use std::collections::HashMap;
 
+#[derive(Clone, PartialEq)]
+pub enum ViewMode {
+    Normal,
+    Adding(Anomaly),
+    Editing(Anomaly),
+}
+
 // App state.
 pub struct App {
     pub current_system: Option<String>,
@@ -12,10 +19,7 @@ pub struct App {
 
     pub data_index: usize,
 
-    pub is_adding: bool,
-    pub adding_data: Option<Anomaly>,
-    pub is_editing: bool,
-    pub editing_data: Option<Anomaly>,
+    pub view: ViewMode,
 }
 
 impl App {
@@ -48,10 +52,7 @@ impl App {
 
             data_index: 0,
 
-            is_adding: false,
-            adding_data: None,
-            is_editing: false,
-            editing_data: None,
+            view: ViewMode::Normal,
         }
     }
 

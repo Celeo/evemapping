@@ -1,63 +1,10 @@
 #![allow(unused)]
 
-use std::fmt;
+use once_cell::sync::Lazy;
+use serde::Deserialize;
+use std::{collections::HashMap, fmt};
 
-#[derive(Debug, Clone)]
-pub enum SystemAffect {
-    None,
-    Pulsar,
-    BlackHole,
-    CataVar,
-    Magnetar,
-    RedGiant,
-    WolfRayet,
-}
-
-#[derive(Debug, Clone)]
-pub enum SystemClassification {
-    Unknown,
-    HighSec,
-    LowSec,
-    NullSec,
-    C1,
-    C2,
-    C3,
-    C4,
-    C5,
-    C6,
-    C13,
-    Thera,
-}
-
-#[derive(Debug, Clone)]
-pub struct StaticWormhole {
-    classifier: String,
-    source: SystemClassification,
-    destination: SystemClassification,
-}
-
-#[derive(Debug, Clone)]
-pub struct WSpaceData {
-    affect: SystemAffect,
-    statics: Vec<StaticWormhole>,
-}
-
-#[derive(Debug, Clone)]
-pub enum SystemType {
-    KSpace,
-    WSpace(WSpaceData),
-}
-
-/// Represents a system.
-#[derive(Debug, Clone)]
-pub struct System {
-    id: u32,
-    name: String,
-    classification: SystemClassification,
-    system_type: SystemType,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq)]
 pub enum WormholeLife {
     Stable,
     EndOfLife,
@@ -72,7 +19,7 @@ impl WormholeLife {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq)]
 pub enum WormholeMass {
     Stable,
     Destab,
@@ -89,10 +36,16 @@ impl WormholeMass {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Default)]
 pub struct AnomalyId {
     pub id: String,
     pub number: u16,
+}
+
+impl fmt::Display for AnomalyId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.id, self.number)
+    }
 }
 
 impl AnomalyId {
@@ -104,7 +57,7 @@ impl AnomalyId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq)]
 pub struct AnomalyWormhole {
     pub wh_type: Option<String>,
     pub destination: Option<String>,
@@ -128,8 +81,9 @@ impl AnomalyWormhole {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Default)]
 pub enum AnomalyType {
+    #[default]
     Unknown,
     /// Fields: name
     Combat(Option<String>),
@@ -191,10 +145,10 @@ impl fmt::Display for AnomalyType {
 }
 
 /// Represents a scannable item in space.
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Default)]
 pub struct Anomaly {
-    identifier: AnomalyId,
-    anomaly_type: AnomalyType,
+    pub identifier: AnomalyId,
+    pub anomaly_type: AnomalyType,
 }
 
 impl fmt::Display for Anomaly {
@@ -214,4 +168,56 @@ impl Anomaly {
             anomaly_type: ty,
         }
     }
+}
+
+#[derive(Clone, Deserialize)]
+pub struct WormholeInfo {
+    pub life: String,
+    pub from: Vec<String>,
+    #[serde(rename = "leadsTo")]
+    pub leads_to: String,
+    pub mass: u64,
+    pub jump: u64,
+}
+
+/// All wormhole types in a map of identifier to data.
+pub static WORMHOLE_TYPES: Lazy<HashMap<String, WormholeInfo>> = Lazy::new(|| {
+    let raw = include_str!("../static/wormhole_types.json");
+    let parsed = serde_json::from_str(raw).unwrap();
+    parsed
+});
+
+/// Data about a single system.
+#[derive(Clone, Deserialize)]
+pub struct SystemData {
+    pub security: String,
+    pub class: Option<u8>,
+    pub effect: Option<String>,
+    pub statics: Vec<String>,
+}
+
+pub enum SystemClassification {
+    HighSec,
+    LowSec,
+    NullSec,
+    WSpace(String),
+    Thera,
+}
+
+impl SystemData {
+    pub fn classification(&self) -> SystemClassification {
+        todo!()
+    }
+}
+
+/// All systems in the game, K-space and W-space.
+pub static ALL_SYSTEMS: Lazy<HashMap<String, SystemData>> = Lazy::new(|| {
+    let raw = include_str!("../static/systems.json");
+    let parsed = serde_json::from_str(raw).unwrap();
+    parsed
+});
+
+/// Lookup system data.
+pub fn get_system_data(name: &str) -> Option<&SystemData> {
+    ALL_SYSTEMS.get(name)
 }
