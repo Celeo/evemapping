@@ -26,7 +26,7 @@ impl App {
     pub fn new() -> Self {
         let mut system_data = HashMap::new();
         system_data.insert(
-            "J123456".to_owned(),
+            "J173213".to_owned(),
             vec![
                 Anomaly::new(
                     "ABC",
@@ -47,7 +47,7 @@ impl App {
         );
 
         Self {
-            current_system: Some("J123456".to_owned()),
+            current_system: Some("J173213".to_owned()),
             system_data,
 
             data_index: 0,

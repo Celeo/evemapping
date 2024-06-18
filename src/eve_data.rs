@@ -170,7 +170,7 @@ impl Anomaly {
     }
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Deserialize)]
 pub struct WormholeInfo {
     pub life: String,
     pub from: Vec<String>,
@@ -183,14 +183,13 @@ pub struct WormholeInfo {
 /// All wormhole types in a map of identifier to data.
 pub static WORMHOLE_TYPES: Lazy<HashMap<String, WormholeInfo>> = Lazy::new(|| {
     let raw = include_str!("../static/wormhole_types.json");
-    let parsed = serde_json::from_str(raw).unwrap();
-    parsed
+    serde_json::from_str(raw).unwrap()
 });
 
 /// Data about a single system.
-#[derive(Clone, Deserialize)]
+#[derive(Deserialize)]
 pub struct SystemData {
-    pub security: String,
+    pub security: f32,
     pub class: Option<u8>,
     pub effect: Option<String>,
     pub statics: Vec<String>,
@@ -200,21 +199,39 @@ pub enum SystemClassification {
     HighSec,
     LowSec,
     NullSec,
-    WSpace(String),
-    Thera,
+    WSpace(u8),
+}
+
+impl SystemClassification {
+    pub fn as_str(&self) -> String {
+        match self {
+            Self::HighSec => String::from("High-Sec"),
+            Self::LowSec => String::from("Low-Sec"),
+            Self::NullSec => String::from("Null-Sec"),
+            Self::WSpace(class) => format!("Class-{class}"),
+        }
+    }
 }
 
 impl SystemData {
+    /// Typical system security classification options.
     pub fn classification(&self) -> SystemClassification {
-        todo!()
+        if let Some(c) = self.class {
+            SystemClassification::WSpace(c)
+        } else if self.security >= 0.5 {
+            SystemClassification::HighSec
+        } else if self.security >= 0.1 {
+            SystemClassification::LowSec
+        } else {
+            SystemClassification::NullSec
+        }
     }
 }
 
 /// All systems in the game, K-space and W-space.
 pub static ALL_SYSTEMS: Lazy<HashMap<String, SystemData>> = Lazy::new(|| {
     let raw = include_str!("../static/systems.json");
-    let parsed = serde_json::from_str(raw).unwrap();
-    parsed
+    serde_json::from_str(raw).unwrap()
 });
 
 /// Lookup system data.

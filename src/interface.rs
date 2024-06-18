@@ -1,5 +1,5 @@
 use crate::{
-    eve_data::{get_system_data, Anomaly},
+    eve_data::{get_system_data, Anomaly, WORMHOLE_TYPES},
     state::{App, ViewMode},
 };
 use anyhow::Result;
@@ -63,31 +63,24 @@ pub async fn run(_esi: Esi) -> Result<()> {
                         let block = Block::default()
                             .title(current_system.to_string())
                             .borders(Borders::ALL);
-                        let spans = vec![
+                        let mut spans = vec![
                             Spans::from(vec![
                                 Span::styled(
                                     "Type: ",
                                     Style::default().add_modifier(Modifier::BOLD),
                                 ),
-                                Span::raw(system_type.as_str()),
+                                Span::styled(
+                                    data.classification().as_str(),
+                                    style_for_system(&data.classification().as_str()),
+                                ),
                             ]),
-                            if data.class.is_some() {
-                                let mut statics: Vec<_> = connections
-                                    .iter()
-                                    .map(|c| {
-                                        Span::raw(format!(
-                                            "- {} -> {}",
-                                            c.classifier,
-                                            c.destination.as_str()
-                                        ))
-                                    })
-                                    .collect();
-                                statics.insert(0, Span::raw("Static connections:"));
-                                Spans::from(vec![Span::raw("Static connections:")])
-                            } else {
-                                Spans::from(Vec::new())
-                            },
+                            Spans::from(Vec::new()),
+                            Spans::from(vec![Span::raw("Static connections:")]),
                         ];
+                        if data.class.is_some() {
+                            let statics = format_system_statics(&data.statics);
+                            spans.extend(statics);
+                        }
                         let static_info_p = Paragraph::new(spans).block(block);
                         f.render_widget(static_info_p, top_chunks[0]);
                     }
@@ -119,8 +112,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
             let anoms = List::new(list_items)
                 .block(block)
                 .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().bg(Color::White))
-                .highlight_symbol(">> ");
+                .highlight_symbol(">>  ");
             let mut anoms_state = ListState::default();
             if system_anoms_count > 0 {
                 anoms_state.select(Some(app.data_index));
@@ -229,4 +221,33 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             .as_ref(),
         )
         .split(popup_layout[1])[1]
+}
+
+/// Styling for the system.
+fn style_for_system(leads_to: &str) -> Style {
+    if leads_to == "High-Sec" {
+        Style::default().fg(Color::Green)
+    } else if leads_to == "Low-Sec" {
+        Style::default().fg(Color::Yellow)
+    } else if leads_to == "Null-Sec" {
+        Style::default().fg(Color::Red)
+    } else {
+        Style::default().fg(Color::Magenta)
+    }
+}
+
+/// Format the static connections for display.
+pub fn format_system_statics(statics: &[String]) -> Vec<Spans> {
+    statics
+        .iter()
+        .map(|s| {
+            let data = WORMHOLE_TYPES.get(s).expect("Invalid WH type");
+            Spans::from(vec![
+                Span::raw("- "),
+                Span::raw(s),
+                Span::raw(" -> "),
+                Span::styled(&data.leads_to, style_for_system(&data.leads_to)),
+            ])
+        })
+        .collect()
 }
