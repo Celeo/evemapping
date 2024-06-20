@@ -1,10 +1,12 @@
 #![allow(unused)]
 
+use anyhow::Result;
+use log::info;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{collections::HashMap, fmt};
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WormholeLife {
     Stable,
     EndOfLife,
@@ -19,7 +21,7 @@ impl WormholeLife {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WormholeMass {
     Stable,
     Destab,
@@ -36,7 +38,7 @@ impl WormholeMass {
     }
 }
 
-#[derive(Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AnomalyId {
     pub id: String,
     pub number: u16,
@@ -57,7 +59,7 @@ impl AnomalyId {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnomalyWormhole {
     pub wh_type: Option<String>,
     pub destination: Option<String>,
@@ -81,7 +83,7 @@ impl AnomalyWormhole {
     }
 }
 
-#[derive(Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum AnomalyType {
     #[default]
     Unknown,
@@ -145,7 +147,7 @@ impl fmt::Display for AnomalyType {
 }
 
 /// Represents a scannable item in space.
-#[derive(Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Anomaly {
     pub identifier: AnomalyId,
     pub anomaly_type: AnomalyType,
@@ -237,4 +239,80 @@ pub static ALL_SYSTEMS: Lazy<HashMap<String, SystemData>> = Lazy::new(|| {
 /// Lookup system data.
 pub fn get_system_data(name: &str) -> Option<&SystemData> {
     ALL_SYSTEMS.get(name)
+}
+
+#[derive(Debug)]
+pub struct ClipboardItem {
+    pub id: String,
+    pub sig_type: String,
+    pub sig_name: String,
+}
+
+impl ClipboardItem {
+    fn new(
+        id: impl Into<String>,
+        sig_type: impl Into<String>,
+        sig_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            sig_type: sig_type.into(),
+            sig_name: sig_name.into(),
+        }
+    }
+}
+
+/// Parse clipboard data to extract any cosmic signature data.
+pub fn parse_paste(text: &str) -> Vec<ClipboardItem> {
+    let mut findings: Vec<ClipboardItem> = Vec::new();
+    for line in text.split_terminator('\n') {
+        let id: String = line.chars().take(6).collect();
+        let parts = line.split('\t').skip(2).collect::<Vec<_>>();
+        if parts[0] == "Wormhole" {
+            findings.push(ClipboardItem::new(id, "", ""));
+        } else if parts[0] == "Gas Site"
+            || parts[0] == "Relic Site"
+            || parts[0] == "Data Site"
+            || parts[0] == "Combat Site"
+        {
+            let name = match parts.get(1) {
+                Some(s) => s,
+                None => "",
+            };
+            findings.push(ClipboardItem::new(id, parts[0].replace(" Site", ""), name));
+        } else {
+            findings.push(ClipboardItem::new(id, "", ""));
+        }
+    }
+    findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_paste, ClipboardItem};
+
+    #[test]
+    fn test_parse_paste() {
+        let text = r#"OEB-892	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	4.99 AU
+YQS-184	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	2.93 AU
+OVD-328	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	71 km
+WIV-940	Cosmic Signature	Relic Site	Ruined Blood Raider Temple Site	100.0%	8.98 AU
+ROZ-580	Cosmic Signature	Relic Site	Ruined Angel Temple Site	100.0%	2.07 AU
+MJK-752	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	6.89 AU
+ZYP-580	Cosmic Signature			10.4%	5.77 AU
+LHB-560	Cosmic Signature			8.8%	2.95 AU
+WYT-700	Cosmic Signature	Gas Site		5.2%	4.02 AU"#;
+        let results = parse_paste(text);
+        let expected: Vec<ClipboardItem> = vec![
+            ClipboardItem::new("OEB-892", "Wormhole", ""),
+            ClipboardItem::new("YQS-184", "Wormhole", ""),
+            ClipboardItem::new("OVD-328", "Wormhole", ""),
+            ClipboardItem::new("WIV-940", "Relic", "Ruined Blood Raider Temple Site"),
+            ClipboardItem::new("ROZ-580", "Relic", "Ruined Angel Temple Site"),
+            ClipboardItem::new("MJK-752", "Wormhole", ""),
+            ClipboardItem::new("ZYP-580", "", ""),
+            ClipboardItem::new("LHB-560", "", ""),
+            ClipboardItem::new("WYT-700", "Gas", ""),
+        ];
+    }
 }

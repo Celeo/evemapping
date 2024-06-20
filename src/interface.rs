@@ -1,5 +1,5 @@
 use crate::{
-    eve_data::{get_system_data, Anomaly, WORMHOLE_TYPES},
+    eve_data::{get_system_data, parse_paste, Anomaly, WORMHOLE_TYPES},
     state::{App, ViewMode},
 };
 use anyhow::Result;
@@ -174,6 +174,12 @@ pub async fn run(_esi: Esi) -> Result<()> {
                             }
                             KeyCode::Char('n') => {
                                 app.view = ViewMode::Adding(Anomaly::default());
+                            }
+                            KeyCode::Char('v') => {
+                                if let Ok(clipboard) = cli_clipboard::get_contents() {
+                                    let results = parse_paste(&clipboard);
+                                    // TODO
+                                }
                             }
                             _ => {}
                         }
