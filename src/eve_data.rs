@@ -268,28 +268,28 @@ impl ClipboardItem {
     }
 }
 
-impl Into<(SignatureId, SignatureType)> for &ClipboardItem {
-    fn into(self) -> (SignatureId, SignatureType) {
-        let mut id_parts = self.id.split(':');
+impl From<&ClipboardItem> for (SignatureId, SignatureType) {
+    fn from(val: &ClipboardItem) -> Self {
+        let mut id_parts = val.id.split(':');
         let id = SignatureId::new(
             id_parts.next().unwrap(),
             id_parts.next().unwrap().parse().unwrap(),
         );
 
-        let name = if self.sig_name.is_empty() {
+        let name = if val.sig_name.is_empty() {
             None
         } else {
-            Some(self.sig_type.clone())
+            Some(val.sig_type.clone())
         };
-        let st = if self.sig_type == "Wormhole" {
+        let st = if val.sig_type == "Wormhole" {
             SignatureType::Wormhole(SignatureWormhole::default())
-        } else if self.sig_type == "Gas" {
+        } else if val.sig_type == "Gas" {
             SignatureType::Gas(name)
-        } else if self.sig_type == "Relic" {
+        } else if val.sig_type == "Relic" {
             SignatureType::Relic(name)
-        } else if self.sig_type == "Data" {
+        } else if val.sig_type == "Data" {
             SignatureType::Data(name)
-        } else if self.sig_type == "Combat" {
+        } else if val.sig_type == "Combat" {
             SignatureType::Combat(name)
         } else {
             SignatureType::Unknown
