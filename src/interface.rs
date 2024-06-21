@@ -1,5 +1,5 @@
 use crate::{
-    eve_data::{get_system_data, parse_paste, Anomaly, WORMHOLE_TYPES},
+    eve_data::{parse_paste, Signature, ALL_SYSTEMS, WORMHOLE_TYPES},
     state::{App, ViewMode},
 };
 use anyhow::Result;
@@ -44,7 +44,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
             debug!("Query ESI");
             last_updated = Instant::now();
         }
-        let system_anoms_count = app.system_anomalies().len();
+        let system_sig_count = app.system_signatures().len();
 
         let _ = terminal.draw(|f| {
             let chunks = Layout::default()
@@ -58,8 +58,8 @@ pub async fn run(_esi: Esi) -> Result<()> {
                 .split(chunks[0]);
 
             match app.current_system.as_ref() {
-                Some(current_system) => match get_system_data(&current_system) {
-                    Some(data) => {
+                Some(current_system) => {
+                    if let Some(data) = ALL_SYSTEMS.get(current_system) {
                         let block = Block::default()
                             .title(current_system.to_string())
                             .borders(Borders::ALL);
@@ -84,8 +84,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
                         let static_info_p = Paragraph::new(spans).block(block);
                         f.render_widget(static_info_p, top_chunks[0]);
                     }
-                    None => {}
-                },
+                }
                 None => {
                     f.render_widget(
                         Block::default()
@@ -109,15 +108,15 @@ pub async fn run(_esi: Esi) -> Result<()> {
                 },
                 None => Vec::new(),
             };
-            let anoms = List::new(list_items)
+            let sigs = List::new(list_items)
                 .block(block)
                 .style(Style::default().fg(Color::White))
                 .highlight_symbol(">>  ");
-            let mut anoms_state = ListState::default();
-            if system_anoms_count > 0 {
-                anoms_state.select(Some(app.data_index));
+            let mut sigs_state = ListState::default();
+            if system_sig_count > 0 {
+                sigs_state.select(Some(app.data_index));
             }
-            f.render_stateful_widget(anoms, top_chunks[1], &mut anoms_state);
+            f.render_stateful_widget(sigs, top_chunks[1], &mut sigs_state);
 
             let block = Block::default().title("Map").borders(Borders::ALL);
             f.render_widget(block, chunks[1]);
@@ -126,7 +125,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
                 let title = match &app.view {
                     ViewMode::Normal => "",
                     ViewMode::Adding(_) => "Add",
-                    ViewMode::Editing(anom) => &format!("Edit {}", anom.identifier),
+                    ViewMode::Editing(sig) => &format!("Edit {}", sig.identifier),
                 };
                 let block = Block::default()
                     .border_style(Style::default().fg(Color::Yellow))
@@ -152,28 +151,27 @@ pub async fn run(_esi: Esi) -> Result<()> {
                         match key.code {
                             KeyCode::Char('q') => break,
                             KeyCode::Enter => {
-                                if system_anoms_count > 0 {
+                                if system_sig_count > 0 {
                                     if let Some(current_system) = app.current_system.as_ref() {
                                         if let Some(data) = app.system_data.get(current_system) {
-                                            let anom_to_edit = data.get(app.data_index).unwrap();
-                                            app.view = ViewMode::Editing(anom_to_edit.clone());
+                                            let sigs_to_edit = data.get(app.data_index).unwrap();
+                                            app.view = ViewMode::Editing(sigs_to_edit.clone());
                                         }
                                     }
                                 }
                             }
                             KeyCode::Down => {
-                                if system_anoms_count > 1 && app.data_index < system_anoms_count - 1
-                                {
+                                if system_sig_count > 1 && app.data_index < system_sig_count - 1 {
                                     app.data_index += 1;
                                 }
                             }
                             KeyCode::Up => {
-                                if system_anoms_count > 1 && app.data_index > 0 {
+                                if system_sig_count > 1 && app.data_index > 0 {
                                     app.data_index -= 1;
                                 }
                             }
                             KeyCode::Char('n') => {
-                                app.view = ViewMode::Adding(Anomaly::default());
+                                app.view = ViewMode::Adding(Signature::default());
                             }
                             KeyCode::Char('v') => {
                                 if let Ok(clipboard) = cli_clipboard::get_contents() {
@@ -184,8 +182,8 @@ pub async fn run(_esi: Esi) -> Result<()> {
                             _ => {}
                         }
                     }
-                    ViewMode::Adding(_new_anom) => {}
-                    ViewMode::Editing(_anom_edit) => {}
+                    ViewMode::Adding(_new_sig) => {}
+                    ViewMode::Editing(_edit_sig) => {}
                 }
             }
         }

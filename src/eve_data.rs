@@ -39,18 +39,18 @@ impl WormholeMass {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct AnomalyId {
+pub struct SignatureId {
     pub id: String,
     pub number: u16,
 }
 
-impl fmt::Display for AnomalyId {
+impl fmt::Display for SignatureId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.id, self.number)
     }
 }
 
-impl AnomalyId {
+impl SignatureId {
     pub fn new(id: &str, number: u16) -> Self {
         Self {
             id: id.to_owned(),
@@ -60,14 +60,25 @@ impl AnomalyId {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnomalyWormhole {
+pub struct SignatureWormhole {
     pub wh_type: Option<String>,
     pub destination: Option<String>,
     pub life: WormholeLife,
     pub mass: WormholeMass,
 }
 
-impl AnomalyWormhole {
+impl Default for SignatureWormhole {
+    fn default() -> Self {
+        Self {
+            wh_type: None,
+            destination: None,
+            life: WormholeLife::Stable,
+            mass: WormholeMass::Stable,
+        }
+    }
+}
+
+impl SignatureWormhole {
     pub fn new(
         wh_type: Option<String>,
         destination: Option<String>,
@@ -84,12 +95,12 @@ impl AnomalyWormhole {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub enum AnomalyType {
+pub enum SignatureType {
     #[default]
     Unknown,
     /// Fields: name
     Combat(Option<String>),
-    Wormhole(AnomalyWormhole),
+    Wormhole(SignatureWormhole),
     /// Fields: name
     Ore(Option<String>),
     /// Fields: name
@@ -100,7 +111,7 @@ pub enum AnomalyType {
     Gas(Option<String>),
 }
 
-impl fmt::Display for AnomalyType {
+impl fmt::Display for SignatureType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unknown => {
@@ -148,26 +159,26 @@ impl fmt::Display for AnomalyType {
 
 /// Represents a scannable item in space.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Anomaly {
-    pub identifier: AnomalyId,
-    pub anomaly_type: AnomalyType,
+pub struct Signature {
+    pub identifier: SignatureId,
+    pub signature_type: SignatureType,
 }
 
-impl fmt::Display for Anomaly {
+impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}:{}      {}",
-            self.identifier.id, self.identifier.number, self.anomaly_type
+            self.identifier.id, self.identifier.number, self.signature_type
         )
     }
 }
 
-impl Anomaly {
-    pub fn new(id: &str, number: u16, ty: AnomalyType) -> Self {
+impl Signature {
+    pub fn new(id: &str, number: u16, ty: SignatureType) -> Self {
         Self {
-            identifier: AnomalyId::new(id, number),
-            anomaly_type: ty,
+            identifier: SignatureId::new(id, number),
+            signature_type: ty,
         }
     }
 }
@@ -236,11 +247,6 @@ pub static ALL_SYSTEMS: Lazy<HashMap<String, SystemData>> = Lazy::new(|| {
     serde_json::from_str(raw).unwrap()
 });
 
-/// Lookup system data.
-pub fn get_system_data(name: &str) -> Option<&SystemData> {
-    ALL_SYSTEMS.get(name)
-}
-
 #[derive(Debug)]
 pub struct ClipboardItem {
     pub id: String,
@@ -262,12 +268,49 @@ impl ClipboardItem {
     }
 }
 
+impl Into<(SignatureId, SignatureType)> for &ClipboardItem {
+    fn into(self) -> (SignatureId, SignatureType) {
+        let mut id_parts = self.id.split(':');
+        let id = SignatureId::new(
+            id_parts.next().unwrap(),
+            id_parts.next().unwrap().parse().unwrap(),
+        );
+
+        let name = if self.sig_name.is_empty() {
+            None
+        } else {
+            Some(self.sig_type.clone())
+        };
+        let st = if self.sig_type == "Wormhole" {
+            SignatureType::Wormhole(SignatureWormhole::default())
+        } else if self.sig_type == "Gas" {
+            SignatureType::Gas(name)
+        } else if self.sig_type == "Relic" {
+            SignatureType::Relic(name)
+        } else if self.sig_type == "Data" {
+            SignatureType::Data(name)
+        } else if self.sig_type == "Combat" {
+            SignatureType::Combat(name)
+        } else {
+            SignatureType::Unknown
+        };
+
+        (id, st)
+    }
+}
+
 /// Parse clipboard data to extract any cosmic signature data.
 pub fn parse_paste(text: &str) -> Vec<ClipboardItem> {
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
     let mut findings: Vec<ClipboardItem> = Vec::new();
     for line in text.split_terminator('\n') {
         let id: String = line.chars().take(6).collect();
         let parts = line.split('\t').skip(2).collect::<Vec<_>>();
+        if parts.is_empty() {
+            continue;
+        }
         if parts[0] == "Wormhole" {
             findings.push(ClipboardItem::new(id, "", ""));
         } else if parts[0] == "Gas Site"
