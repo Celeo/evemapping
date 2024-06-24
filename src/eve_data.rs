@@ -157,6 +157,20 @@ impl fmt::Display for SignatureType {
     }
 }
 
+impl SignatureType {
+    pub fn has_name(&self) -> bool {
+        match self {
+            Self::Unknown => false,
+            Self::Wormhole(_) => true,
+            Self::Combat(name)
+            | Self::Ore(name)
+            | Self::Data(name)
+            | Self::Relic(name)
+            | Self::Gas(name) => name.is_some(),
+        }
+    }
+}
+
 /// Represents a scannable item in space.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Signature {
@@ -255,7 +269,7 @@ pub struct ClipboardItem {
 }
 
 impl ClipboardItem {
-    fn new(
+    pub fn new(
         id: impl Into<String>,
         sig_type: impl Into<String>,
         sig_name: impl Into<String>,
@@ -279,7 +293,7 @@ impl From<&ClipboardItem> for (SignatureId, SignatureType) {
         let name = if val.sig_name.is_empty() {
             None
         } else {
-            Some(val.sig_type.clone())
+            Some(val.sig_name.clone())
         };
         let st = if val.sig_type == "Wormhole" {
             SignatureType::Wormhole(SignatureWormhole::default())

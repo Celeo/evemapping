@@ -176,7 +176,7 @@ pub async fn run(_esi: Esi) -> Result<()> {
                             KeyCode::Char('v') => {
                                 if let Ok(clipboard) = cli_clipboard::get_contents() {
                                     let results = parse_paste(&clipboard);
-                                    // TODO
+                                    app.merge_in(&results);
                                 }
                             }
                             _ => {}
