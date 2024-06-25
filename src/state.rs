@@ -33,12 +33,12 @@ impl App {
             vec![
                 Signature::new(
                     "ABC",
-                    123,
+                    "123",
                     SignatureType::Combat(Some("Some Combat Site".to_owned())),
                 ),
                 Signature::new(
                     "DEF",
-                    456,
+                    "456",
                     SignatureType::Wormhole(SignatureWormhole {
                         wh_type: Some("K162".to_owned()),
                         destination: None,
@@ -162,7 +162,7 @@ mod tests {
             "Thera".to_owned(),
             vec![Signature::new(
                 "ABC",
-                123,
+                "123",
                 crate::eve_data::SignatureType::Data(Some("Foobar".to_owned())),
             )],
         );
@@ -179,17 +179,17 @@ mod tests {
             "Thera".to_owned(),
             vec![Signature::new(
                 "ABC",
-                123,
+                "123",
                 crate::eve_data::SignatureType::Unknown,
             )],
         );
 
-        app.merge_in(&[ClipboardItem::new("ABC:123", "Relic", "Foobar")]);
+        app.merge_in(&[ClipboardItem::new("ABC-123", "Relic", "Foobar")]);
 
         assert_eq!(app.system_data.get("Thera").unwrap().len(), 1);
         let sig = app.system_data.get("Thera").unwrap().get(0).unwrap();
         assert_eq!(sig.identifier.id, "ABC".to_owned());
-        assert_eq!(sig.identifier.number, 123);
+        assert_eq!(sig.identifier.number, "123");
         match sig.signature_type {
             crate::eve_data::SignatureType::Relic(ref name) => {
                 assert_eq!(name, &Some("Foobar".to_owned()));
@@ -208,17 +208,17 @@ mod tests {
             "Thera".to_owned(),
             vec![Signature::new(
                 "ABC",
-                123,
+                "123",
                 crate::eve_data::SignatureType::Relic(None),
             )],
         );
 
-        app.merge_in(&[ClipboardItem::new("ABC:123", "Relic", "Foobar")]);
+        app.merge_in(&[ClipboardItem::new("ABC-123", "Relic", "Foobar")]);
 
         assert_eq!(app.system_data.get("Thera").unwrap().len(), 1);
         let sig = app.system_data.get("Thera").unwrap().get(0).unwrap();
         assert_eq!(sig.identifier.id, "ABC".to_owned());
-        assert_eq!(sig.identifier.number, 123);
+        assert_eq!(sig.identifier.number, "123");
         match sig.signature_type {
             crate::eve_data::SignatureType::Relic(ref name) => {
                 assert_eq!(name, &Some("Foobar".to_owned()));
@@ -237,17 +237,17 @@ mod tests {
             "Thera".to_owned(),
             vec![Signature::new(
                 "ABC",
-                123,
+                "123",
                 crate::eve_data::SignatureType::Relic(Some("Foobar".to_owned())),
             )],
         );
 
-        app.merge_in(&[ClipboardItem::new("ABC:123", "Relic", "")]);
+        app.merge_in(&[ClipboardItem::new("ABC-123", "Relic", "")]);
 
         assert_eq!(app.system_data.get("Thera").unwrap().len(), 1);
         let sig = app.system_data.get("Thera").unwrap().get(0).unwrap();
         assert_eq!(sig.identifier.id, "ABC".to_owned());
-        assert_eq!(sig.identifier.number, 123);
+        assert_eq!(sig.identifier.number, "123");
         match sig.signature_type {
             crate::eve_data::SignatureType::Relic(ref name) => {
                 assert_eq!(name, &Some("Foobar".to_owned()));
@@ -272,17 +272,17 @@ mod tests {
             "Thera".to_owned(),
             vec![Signature::new(
                 "ABC",
-                123,
+                "123",
                 crate::eve_data::SignatureType::Wormhole(wh),
             )],
         );
 
-        app.merge_in(&[ClipboardItem::new("ABC:123", "Wormhole", "")]);
+        app.merge_in(&[ClipboardItem::new("ABC-123", "Wormhole", "")]);
 
         assert_eq!(app.system_data.get("Thera").unwrap().len(), 1);
         let sig = app.system_data.get("Thera").unwrap().get(0).unwrap();
         assert_eq!(sig.identifier.id, "ABC".to_owned());
-        assert_eq!(sig.identifier.number, 123);
+        assert_eq!(sig.identifier.number, "123");
         match sig.signature_type {
             SignatureType::Wormhole(ref data) => {
                 assert_eq!(data.wh_type, Some("A239".to_owned()));

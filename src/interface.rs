@@ -1,5 +1,5 @@
 use crate::{
-    eve_data::{parse_paste, Signature, ALL_SYSTEMS, WORMHOLE_TYPES},
+    eve_data::{parse_paste, Signature, SignatureType, ALL_SYSTEMS, WORMHOLE_TYPES},
     state::{App, ViewMode},
 };
 use anyhow::Result;
@@ -10,13 +10,18 @@ use crossterm::{
 };
 use log::debug;
 use rfesi::prelude::Esi;
-use std::time::{Duration, Instant};
+use std::{
+    cell::Cell,
+    time::{Duration, Instant},
+};
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Row, Table, TableState,
+    },
     Terminal,
 };
 
@@ -101,18 +106,27 @@ pub async fn run(_esi: Esi) -> Result<()> {
             if app.view == ViewMode::Normal {
                 block = block.border_style(Style::default().fg(Color::Yellow));
             }
-            let list_items = match app.current_system.as_ref() {
+            let table_items = match app.current_system.as_ref() {
                 Some(s) => match app.system_data.get(s) {
-                    Some(d) => d.iter().map(|e| ListItem::new(format!("{e}"))).collect(),
+                    Some(d) => d.iter().map(|e| Row::new(e.to_row())).collect(),
                     None => Vec::new(),
                 },
                 None => Vec::new(),
             };
-            let sigs = List::new(list_items)
+            let sigs = Table::new(table_items)
+                .header(
+                    Row::new(vec!["ID", "Type", "Leads to", "Life/Mass"])
+                        .style(Style::default().fg(Color::Blue)),
+                )
+                .widths(&[
+                    Constraint::Min(10),
+                    Constraint::Min(30),
+                    Constraint::Min(100),
+                    Constraint::Min(18),
+                ])
                 .block(block)
-                .style(Style::default().fg(Color::White))
-                .highlight_symbol(">>  ");
-            let mut sigs_state = ListState::default();
+                .highlight_symbol(">> ");
+            let mut sigs_state = TableState::default();
             if system_sig_count > 0 {
                 sigs_state.select(Some(app.data_index));
             }
@@ -163,11 +177,15 @@ pub async fn run(_esi: Esi) -> Result<()> {
                             KeyCode::Down => {
                                 if system_sig_count > 1 && app.data_index < system_sig_count - 1 {
                                     app.data_index += 1;
+                                } else {
+                                    app.data_index = 0;
                                 }
                             }
                             KeyCode::Up => {
                                 if system_sig_count > 1 && app.data_index > 0 {
                                     app.data_index -= 1;
+                                } else {
+                                    app.data_index = system_sig_count - 1;
                                 }
                             }
                             KeyCode::Char('n') => {
@@ -175,7 +193,9 @@ pub async fn run(_esi: Esi) -> Result<()> {
                             }
                             KeyCode::Char('v') => {
                                 if let Ok(clipboard) = cli_clipboard::get_contents() {
+                                    debug!("Parsing content of clipboard");
                                     let results = parse_paste(&clipboard);
+                                    debug!("Got {} results from clipboard", results.len());
                                     app.merge_in(&results);
                                 }
                             }

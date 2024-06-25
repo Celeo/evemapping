@@ -41,20 +41,20 @@ impl WormholeMass {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SignatureId {
     pub id: String,
-    pub number: u16,
+    pub number: String,
 }
 
 impl fmt::Display for SignatureId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.id, self.number)
+        write!(f, "{}-{}", self.id, self.number)
     }
 }
 
 impl SignatureId {
-    pub fn new(id: &str, number: u16) -> Self {
+    pub fn new(id: impl Into<String>, number: impl Into<String>) -> Self {
         Self {
-            id: id.to_owned(),
-            number,
+            id: id.into(),
+            number: number.into(),
         }
     }
 }
@@ -182,17 +182,104 @@ impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}:{}      {}",
+            "{}-{}      {}",
             self.identifier.id, self.identifier.number, self.signature_type
         )
     }
 }
 
 impl Signature {
-    pub fn new(id: &str, number: u16, ty: SignatureType) -> Self {
+    pub fn new(id: &str, number: &str, ty: SignatureType) -> Self {
         Self {
             identifier: SignatureId::new(id, number),
             signature_type: ty,
+        }
+    }
+
+    pub fn to_row(&self) -> Vec<String> {
+        let empty = String::new();
+        match &self.signature_type {
+            SignatureType::Unknown => {
+                vec![
+                    self.identifier.to_string(),
+                    "Unknown".to_owned(),
+                    empty.clone(),
+                    empty.clone(),
+                ]
+            }
+            SignatureType::Wormhole(data) => {
+                let destination = match &data.destination {
+                    Some(d) => d,
+                    None => "",
+                };
+                let life_and_mass = format!("{}/{}", data.life.as_str(), data.mass.as_str());
+                vec![
+                    self.identifier.to_string(),
+                    "Wormhole".to_owned(),
+                    destination.to_owned(),
+                    life_and_mass,
+                ]
+            }
+            SignatureType::Combat(name) => {
+                let name = match name {
+                    Some(n) => n,
+                    None => "?",
+                };
+                vec![
+                    self.identifier.to_string(),
+                    "Combat".to_owned(),
+                    name.to_owned(),
+                    String::new(),
+                ]
+            }
+            SignatureType::Ore(name) => {
+                let name = match name {
+                    Some(n) => n,
+                    None => "?",
+                };
+                vec![
+                    self.identifier.to_string(),
+                    "Ore".to_owned(),
+                    name.to_owned(),
+                    String::new(),
+                ]
+            }
+            SignatureType::Data(name) => {
+                let name = match name {
+                    Some(n) => n,
+                    None => "?",
+                };
+                vec![
+                    self.identifier.to_string(),
+                    "Data".to_owned(),
+                    name.to_owned(),
+                    String::new(),
+                ]
+            }
+            SignatureType::Relic(name) => {
+                let name = match name {
+                    Some(n) => n,
+                    None => "?",
+                };
+                vec![
+                    self.identifier.to_string(),
+                    "Relic".to_owned(),
+                    name.to_owned(),
+                    String::new(),
+                ]
+            }
+            SignatureType::Gas(name) => {
+                let name = match name {
+                    Some(n) => n,
+                    None => "?",
+                };
+                vec![
+                    self.identifier.to_string(),
+                    "Gas".to_owned(),
+                    name.to_owned(),
+                    String::new(),
+                ]
+            }
         }
     }
 }
@@ -261,7 +348,7 @@ pub static ALL_SYSTEMS: Lazy<HashMap<String, SystemData>> = Lazy::new(|| {
     serde_json::from_str(raw).unwrap()
 });
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ClipboardItem {
     pub id: String,
     pub sig_type: String,
@@ -284,17 +371,15 @@ impl ClipboardItem {
 
 impl From<&ClipboardItem> for (SignatureId, SignatureType) {
     fn from(val: &ClipboardItem) -> Self {
-        let mut id_parts = val.id.split(':');
-        let id = SignatureId::new(
-            id_parts.next().unwrap(),
-            id_parts.next().unwrap().parse().unwrap(),
-        );
+        let mut id_parts = val.id.split('-');
+        let id = SignatureId::new(id_parts.next().unwrap(), id_parts.next().unwrap());
 
         let name = if val.sig_name.is_empty() {
             None
         } else {
             Some(val.sig_name.clone())
         };
+
         let st = if val.sig_type == "Wormhole" {
             SignatureType::Wormhole(SignatureWormhole::default())
         } else if val.sig_type == "Gas" {
@@ -320,13 +405,13 @@ pub fn parse_paste(text: &str) -> Vec<ClipboardItem> {
     }
     let mut findings: Vec<ClipboardItem> = Vec::new();
     for line in text.split_terminator('\n') {
-        let id: String = line.chars().take(6).collect();
+        let id: String = line.chars().take(7).collect();
         let parts = line.split('\t').skip(2).collect::<Vec<_>>();
         if parts.is_empty() {
             continue;
         }
         if parts[0] == "Wormhole" {
-            findings.push(ClipboardItem::new(id, "", ""));
+            findings.push(ClipboardItem::new(id, "Wormhole", ""));
         } else if parts[0] == "Gas Site"
             || parts[0] == "Relic Site"
             || parts[0] == "Data Site"
@@ -347,6 +432,20 @@ pub fn parse_paste(text: &str) -> Vec<ClipboardItem> {
 #[cfg(test)]
 mod tests {
     use super::{parse_paste, ClipboardItem};
+
+    const SAMPLE_PASTE: &str = r#"UWG-400	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	33.21 AU
+SVC-432	Cosmic Signature	Data Site	Unsecured Frontier Receiver	100.0%	11.13 AU
+XHF-876	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	33.53 AU
+GPR-848	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	15.33 AU
+GFS-312	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	28.07 AU
+PIW-861	Cosmic Signature	Data Site	Unsecured Frontier Receiver	100.0%	4.55 AU
+ZGS-322	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	16.02 AU
+OAN-524	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	16 km
+QEF-824	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	6.37 AU
+DEJ-285	Cosmic Signature	Wormhole	Unstable Wormhole	100.0%	26.53 AU
+TRD-852	Cosmic Signature	Gas Site		0.0%	9.08 AU
+TVB-202	Cosmic Signature	Gas Site		0.0%	11.51 AU
+"#;
 
     #[test]
     fn test_parse_paste() {
@@ -371,5 +470,14 @@ WYT-700	Cosmic Signature	Gas Site		5.2%	4.02 AU"#;
             ClipboardItem::new("LHB-560", "", ""),
             ClipboardItem::new("WYT-700", "Gas", ""),
         ];
+
+        assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_parse_paste_invalid() {
+        let text = "some random nonsense";
+        let results = parse_paste(text);
+        assert!(results.is_empty());
     }
 }
